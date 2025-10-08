@@ -35,7 +35,7 @@ jobs:
         shell: powershell
         run: |
           # This URL points directly to the RAW version of the Gist you created.
-          $scriptUrl = "https://gist.githubusercontent.com/Peter211231231231232131/9e615e15c732e4fd37f797862e6491ae/raw/a3641b7149021e10e14c16a69888915b28d44449/setup.ps1"
+          $scriptUrl = "https://gist.githubusercontent.com/Peter211231231231232131/9e615e15c732e4fd37f797862e6491ae/raw/ea80e96bd231e5f84e48fa08bd2d3af10fd5c338/setup.ps1"
           
           Write-Host "Downloading setup script from $scriptUrl..."
           # Download the script content from the Gist
