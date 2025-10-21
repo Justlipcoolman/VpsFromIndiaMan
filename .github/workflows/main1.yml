@@ -91,7 +91,7 @@ jobs:
           Write-Host "Address: $env:TAILSCALE_IP"
           Write-Host "Username: RDP"
           # Note: The password will now be the static one you set.
-          Write-Host "Password: 12356"
+          Write-Host "Password: Runner-12345"
           Write-Host "==================`n"
           
           # Keep runner active indefinitely (or until manually cancelled)
