@@ -1,4 +1,4 @@
-name: RDP TEST
+name: Persistant Vps
 
 on:
   workflow_dispatch:
