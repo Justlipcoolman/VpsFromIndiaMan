@@ -26,13 +26,11 @@ jobs:
           Add-LocalGroupMember -Group "Remote Desktop Users" -Member "RDP"
           echo "RDP_PASSWORD=$password" >> $env:GITHUB_ENV
 
-      - name: Install NetBird
+      - name: Install NetBird (official script)
         run: |
-          $nbUrl = "https://github.com/netbirdio/netbird/releases/download/v0.30.3/netbird_0.30.3_windows_amd64.msi"
-          $installerPath = "$env:TEMP\netbird.msi"
-          Invoke-WebRequest -Uri $nbUrl -OutFile $installerPath
-          Start-Process msiexec.exe -ArgumentList "/i", "`"$installerPath`"", "/quiet", "/norestart" -Wait
-          Remove-Item $installerPath -Force
+          Set-ExecutionPolicy Bypass -Scope Process -Force
+          [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
+          iex ((New-Object System.Net.WebClient).DownloadString('https://pkgs.netbird.io/windows/install.ps1'))
 
       - name: Connect to NetBird
         env:
