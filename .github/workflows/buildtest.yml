@@ -26,11 +26,41 @@ jobs:
           Add-LocalGroupMember -Group "Remote Desktop Users" -Member "RDP"
           echo "RDP_PASSWORD=$password" >> $env:GITHUB_ENV
 
-      - name: Install NetBird (official script)
+      - name: Install NetBird (with fallbacks)
         run: |
-          Set-ExecutionPolicy Bypass -Scope Process -Force
+          # Enable TLS 1.2
           [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
-          iex ((New-Object System.Net.WebClient).DownloadString('https://pkgs.netbird.io/windows/install.ps1'))
+          
+          # Try multiple URLs
+          $urls = @(
+            "https://github.com/netbirdio/netbird/releases/download/v0.30.3/netbird_0.30.3_windows_amd64.msi",
+            "https://github.com/netbirdio/netbird/releases/download/v0.31.0/netbird_0.31.0_windows_amd64.msi",
+            "https://github.com/netbirdio/netbird/releases/latest/download/netbird_windows_amd64.msi"
+          )
+          
+          $installerPath = "$env:TEMP\netbird.msi"
+          $downloaded = $false
+          
+          foreach ($url in $urls) {
+            try {
+              Write-Host "Trying $url ..."
+              Invoke-WebRequest -Uri $url -OutFile $installerPath -ErrorAction Stop
+              Write-Host "Downloaded successfully from $url"
+              $downloaded = $true
+              break
+            } catch {
+              Write-Host "Failed: $_"
+            }
+          }
+          
+          if (-not $downloaded) {
+            Write-Error "Could not download NetBird from any URL"
+            exit 1
+          }
+          
+          # Install the MSI
+          Start-Process msiexec.exe -ArgumentList "/i", "`"$installerPath`"", "/quiet", "/norestart" -Wait
+          Remove-Item $installerPath -Force
 
       - name: Connect to NetBird
         env:
